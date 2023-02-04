@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
 
 const userSchema = new mongoose.Schema(
    {
@@ -13,6 +14,10 @@ const userSchema = new mongoose.Schema(
       email: {
          type: String,
          required: [true, "email  kiritishingiz shart"],
+      },
+      password: {
+         type: String,
+         required: [true, "siz parol kiritishingiz shart"],
       },
       profilephoto: {
          type: String,
@@ -91,7 +96,7 @@ const userSchema = new mongoose.Schema(
       toJSON: {
          virtuals: true,
       },
-   } 
+   }
 );
 
 module.exports = mongoose.model("Users", userSchema);
