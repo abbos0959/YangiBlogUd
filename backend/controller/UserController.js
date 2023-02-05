@@ -66,7 +66,8 @@ const login = catchErrorAsync(async (req, res, next) => {
 
 const AllUsers = catchErrorAsync(async (req, res, next) => {
    try {
-      console.log(req.headers, "headercha");
+      console.log(req.headers, "headercha", req.cookies);
+
       const alluser = await UserModel.find();
 
       res.status(200).json({
@@ -117,4 +118,77 @@ const SingleUser = catchErrorAsync(async (req, res, next) => {
    }
 });
 
-module.exports = { Register, login, AllUsers, DeleteUser, SingleUser };
+const userProfile = catchErrorAsync(async (req, res, next) => {
+   try {
+      console.log(req.user.id);
+      const user = await UserModel.findById(req.user.id);
+      res.status(200).json({
+         user,
+      });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const userProfileC = catchErrorAsync(async (req, res, next) => {
+   try {
+      console.log(req.user.id);
+      const user = await UserModel.findById(req.params.id);
+      res.status(200).json({
+         user,
+      });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const updateUserProfile = catchErrorAsync(async (req, res, next) => {
+   try {
+      const user = await UserModel.findByIdAndUpdate(req.user._id, req.body);
+      if (!user) {
+         return next(new AppError("Update bo'lmadi", 400));
+      }
+      res.status(200).json({
+         message: "success",
+         user,
+      });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const updateUserPassword = catchErrorAsync(async (req, res, next) => {
+   const user = await UserModel.findById(req.user._id);
+
+   const comparePassword = await bcrypt.compare(req.body.oldpassword.toString(), user.password);
+   if (!comparePassword) {
+      return next(new AppError("parol yoki email xato", 400));
+   }
+
+   user.password = await bcrypt.hash(req.body.newPassword.toString(), 10);
+   await user.save();
+   jwtToken(user, 200, res);
+});
+
+const Following = catchErrorAsync(async (req, res, next) => {
+
+});
+
+module.exports = {
+   Following,
+   updateUserPassword,
+   Register,
+   login,
+   AllUsers,
+   DeleteUser,
+   SingleUser,
+   userProfile,
+   updateUserProfile,
+   userProfileC,
+};
