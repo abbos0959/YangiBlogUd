@@ -4,6 +4,10 @@ const AppError = require("../utils/appError");
 const jwtToken = require("../utils/jwtToken");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
+const sgMail = require("@sendgrid/mail");
+const sendEmail = require("../utils/sendEmail");
+
+sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
 
 const Register = catchErrorAsync(async (req, res, next) => {
    try {
@@ -177,11 +181,131 @@ const updateUserPassword = catchErrorAsync(async (req, res, next) => {
 });
 
 const Following = catchErrorAsync(async (req, res, next) => {
+   try {
+      const followid = req.body.followid;
 
+      const checkfollowid = await mongoose.Types.ObjectId.isValid(followid);
+      if (!checkfollowid) {
+         return next(new AppError("bunday idli user mavjud emas", 404));
+      }
+
+      const follower = await UserModel.findById(req.user._id);
+
+      const check = await follower.following.includes(followid);
+      if (check) {
+         return next(new AppError("siz avval bu foydalanuvchiga obuna bo'lgansiz", 400));
+      }
+
+      await UserModel.findByIdAndUpdate(followid, {
+         $push: { followers: follower },
+         isfollowing: true,
+      });
+
+      await UserModel.findByIdAndUpdate(follower, {
+         $push: { following: followid },
+      });
+
+      res.status(200).json({
+         message: "siz obuna bo'dingiz",
+      });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const unfollowUser = catchErrorAsync(async (req, res, next) => {
+   try {
+      const followid = req.body.followid;
+
+      const checkfollowid = await mongoose.Types.ObjectId.isValid(followid);
+      if (!checkfollowid) {
+         return next(new AppError("bunday idli user mavjud emas", 404));
+      }
+
+      const follower = await UserModel.findById(req.user._id);
+
+      await UserModel.findByIdAndUpdate(followid, {
+         $pull: { followers: mongoose.Types.ObjectId(follower) },
+         isfollowing: true,
+      });
+
+      await UserModel.findByIdAndUpdate(follower, {
+         $pull: { following: mongoose.Types.ObjectId(followid) },
+      });
+
+      res.status(200).json({
+         message: "siz obuna bekor qildingiz",
+      });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const BlockUser = catchErrorAsync(async (req, res, next) => {
+   try {
+      const user = await UserModel.findById(req.params.id);
+      if (!user) {
+         return next(new AppError("bunday user mavjud emas", 400));
+      }
+
+      user.isblocked = true;
+      await user.save();
+      res.status(200).json({ message: "user blocklandi" });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+const UnBlockUser = catchErrorAsync(async (req, res, next) => {
+   try {
+      const user = await UserModel.findById(req.params.id);
+      if (!user) {
+         return next(new AppError("bunday user mavjud emas", 400));
+      }
+
+      user.isblocked = false;
+      await user.save();
+      res.status(200).json({ message: "user blockdan ochildi" });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const generateVerificationTokenCtrl = catchErrorAsync(async (req, res) => {
+   try {
+      //build your message
+      const user = await UserModel.findById(req.user._id);
+
+      const verificationToken = await user.createAccountVerificationToken();
+      await user.save();
+      const message = `siz 10 daqiqa ichida emailingizni tasdiqlashingiz kerak <a href="http://localhost:3000/verify-account/${verificationToken}">Tasdiqlash</a> bosing`;
+      console.log(verificationToken);
+      await sendEmail({
+         email: user.email,
+         subject: "salom ukajon",
+         message,
+      });
+      res.json({
+         message: `${user.email} ga accaount tasdiqlash tokeni yuborildi`,
+      });
+   } catch (error) {
+      res.json(error);
+   }
 });
 
 module.exports = {
+   generateVerificationTokenCtrl,
+   UnBlockUser,
+   BlockUser,
    Following,
+   unfollowUser,
    updateUserPassword,
    Register,
    login,

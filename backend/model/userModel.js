@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 
 const userSchema = new mongoose.Schema(
    {
@@ -98,5 +99,17 @@ const userSchema = new mongoose.Schema(
       },
    }
 );
+
+userSchema.methods.createAccountVerificationToken = async function () {
+   const verificationToken = crypto.randomBytes(32).toString("hex");
+
+   this.accountverificationtoken = crypto
+      .createHash("sha256")
+      .update(verificationToken)
+      .digest("hex");
+
+   this.accountverificationexpired = Date.now() + 30 * 60 * 1000;
+   return verificationToken;
+};
 
 module.exports = mongoose.model("Users", userSchema);
