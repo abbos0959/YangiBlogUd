@@ -6,6 +6,8 @@ const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
 const sgMail = require("@sendgrid/mail");
 const sendEmail = require("../utils/sendEmail");
+const crypto = require("crypto");
+const { log } = require("console");
 
 sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
 
@@ -277,10 +279,9 @@ const UnBlockUser = catchErrorAsync(async (req, res, next) => {
       });
    }
 });
-
+// email tasdiqlash tokeni yaratish
 const generateVerificationTokenCtrl = catchErrorAsync(async (req, res) => {
    try {
-      //build your message
       const user = await UserModel.findById(req.user._id);
 
       const verificationToken = await user.createAccountVerificationToken();
@@ -289,19 +290,132 @@ const generateVerificationTokenCtrl = catchErrorAsync(async (req, res) => {
       console.log(verificationToken);
       await sendEmail({
          email: user.email,
-         subject: "salom ukajon",
+         subject: "Email tasdiqlash tokeni",
          message,
       });
       res.json({
-         message: `${user.email} ga accaount tasdiqlash tokeni yuborildi`,
+         message: `${user.email} ga account tasdiqlash tokeni yuborildi`,
       });
    } catch (error) {
       res.json(error);
    }
 });
+// account tasdiqlash
+
+const accountVerification = catchErrorAsync(async (req, res, next) => {
+   try {
+      const { token } = req.body;
+      const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+      const userFound = await UserModel.findOne({
+         accountverificationtoken: hashedToken,
+         accountverificationexpired: { $gt: new Date() },
+      });
+      if (!userFound) {
+         return next(new AppError("token vaqti tugadi", 400));
+      }
+
+      userFound.isaccountverified = true;
+      userFound.accountverificationtoken = undefined;
+      userFound.accountverificationexpired = undefined;
+      await userFound.save();
+      res.status(200).json({
+         userFound,
+      });
+   } catch (error) {
+      res.status(500).json({
+         message: error.message,
+      });
+   }
+});
+
+const forgotpassword = async (req, res) => {
+   try {
+      const user = await UserModel.findOne({ email: req.body.email });
+      console.log(user);
+
+      if (!user) {
+         return res.status(404).json({
+            success: false,
+            message: "bunday user mavjud emas",
+         });
+      }
+
+      const resetPasswordToken = user.getResetPasswordToken();
+
+      console.log(resetPasswordToken);
+      await user.save();
+
+      const resetPasswordUrl = `${req.protocol}://${req.get(
+         "host"
+      )}/api/v1/password/reset/${resetPasswordToken}`;
+
+      const message = `sizning  parolingiz  tiklash tokeni ${resetPasswordUrl}`;
+
+      try {
+         await sendEmail({
+            email: user.email,
+            subject: "parolingizni tiklash tokeni",
+            message,
+         });
+         res.status(200).json({
+            message: "emailga token yuborildi",
+         });
+      } catch (error) {
+         (user.passwordresettoken = undefined), (user.passwordresetexpires = undefined);
+         await user.save({ validateBeforeSave: false });
+         res.status(500).json({
+            success: false,
+            message: error.message,
+         });
+      }
+   } catch (error) {
+      res.status(500).json({
+         success: false,
+         message: error.message,
+      });
+   }
+};
+
+const resetPassword = async (req, res) => {
+   try {
+      const resetPasswordToken = crypto.createHash("sha256").update(req.params.token).digest("hex");
+
+      const user = await UserModel.findOne({
+         passwordresettoken: resetPasswordToken,
+         passwordresetexpires: { $gt: Date.now() },
+      });
+
+      if (!user) {
+         return res.status(404).json({
+            success: false,
+            message: "token Xatolik mavjud",
+         });
+      }
+
+      const hashPassword1 = await bcrypt.hash(req.body.password.toString(), 12);
+      user.password = hashPassword1;
+      user.passwordresettoken = undefined;
+      user.passwordresetexpires = undefined;
+
+      await user.save();
+      res.status(200).json({
+         success: true,
+         message: "parol yangilandi",
+      });
+   } catch (error) {
+      res.status(500).json({
+         success: false,
+         message: error.message,
+      });
+   }
+};
 
 module.exports = {
+   forgotpassword,
+   resetPassword,
    generateVerificationTokenCtrl,
+   accountVerification,
    UnBlockUser,
    BlockUser,
    Following,

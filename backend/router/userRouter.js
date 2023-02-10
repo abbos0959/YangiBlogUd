@@ -11,7 +11,12 @@ router.route("/me/profile").patch(Isauthentication, UserController.updateUserPro
 router.route("/password/update").patch(Isauthentication, UserController.updateUserPassword);
 router.route("/follow").patch(Isauthentication, UserController.Following);
 router.route("/unfollow").patch(Isauthentication, UserController.unfollowUser);
-router.route("/verify-email").post(Isauthentication, UserController.generateVerificationTokenCtrl);
+router
+   .route("/verify-email-token")
+   .post(Isauthentication, UserController.generateVerificationTokenCtrl);
+router.route("/verify-email").patch(Isauthentication, UserController.accountVerification);
+router.route("/forgot").post(Isauthentication, UserController.forgotpassword);
+router.route("/reset-password/:token").patch(Isauthentication, UserController.resetPassword);
 router.route("/block/:id").patch(Isauthentication, UserController.BlockUser);
 router.route("/unblock/:id").patch(Isauthentication, UserController.UnBlockUser);
 router.route("/profile/:id").get(Isauthentication, UserController.userProfileC);
